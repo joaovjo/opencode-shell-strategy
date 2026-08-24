@@ -57,7 +57,7 @@ cat > "$tmp/required_forms.txt" <<'EOF'
 BatchMode=yes
 StrictHostKeyChecking=accept-new
 sudo -n
-npm init -y
+bun init -y
 EOF
 
 touch "$tmp/extracted_blocks.txt"

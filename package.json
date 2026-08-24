@@ -1,16 +1,27 @@
 {
-  "name": "opencode-shell-non-interactive-strategy",
-  "version": "1.1.0",
-  "description": "Rules and strategies for AI agents to operate in non-interactive shell environments",
+  "name": "opencode-shell-strategy",
+  "version": "2.0.0",
+  "description": "Rules and strategies for AI agents to operate safely in non-interactive shell environments (Bun, uv, fnm, PowerShell 7+, bash, fish)",
   "main": "shell_strategy.md",
+  "scripts": {
+    "test": "bun test",
+    "test:sh": "sh ./test.sh"
+  },
   "keywords": [
     "opencode",
     "plugin",
     "agent",
     "shell",
     "automation",
-    "headless"
+    "headless",
+    "bun",
+    "uv",
+    "fnm",
+    "powershell"
   ],
-  "author": "JRede",
-  "license": "MIT"
+  "author": "joaovjo",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bun": "^1.4.0"
+  }
 }
