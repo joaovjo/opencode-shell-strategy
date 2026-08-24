@@ -16,28 +16,32 @@ describe("opencode-shell-strategy v2.0.0 verification", () => {
   const strategyContent = existsSync(STRATEGY_PATH) ? readFileSync(STRATEGY_PATH, "utf-8") : "";
 
   function extractCodeBlocks(content: string): Array<{ lang: string; code: string; line: number }> {
-    const lines = content.split("\n");
+    const lines = content.replace(/\r\n/g, "\n").split("\n");
     const blocks: Array<{ lang: string; code: string; line: number }> = [];
     let inBlock = false;
     let currentLang = "";
     let currentCode: string[] = [];
     let startLine = 0;
 
+    const shellLangs = new Set(["sh", "bash", "zsh", "powershell", "pwsh"]);
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      const match = line.match(/^```(sh|bash|zsh|powershell|pwsh)?$/);
+      const match = line.match(/^```(\w+)?$/);
       if (match && !inBlock) {
         inBlock = true;
-        currentLang = match[1] || "text";
+        currentLang = (match[1] || "").toLowerCase();
         currentCode = [];
         startLine = i + 1;
       } else if (line.trim() === "```" && inBlock) {
         inBlock = false;
-        blocks.push({
-          lang: currentLang,
-          code: currentCode.join("\n"),
-          line: startLine,
-        });
+        if (shellLangs.has(currentLang)) {
+          blocks.push({
+            lang: currentLang,
+            code: currentCode.join("\n"),
+            line: startLine,
+          });
+        }
       } else if (inBlock) {
         currentCode.push(line);
       }
