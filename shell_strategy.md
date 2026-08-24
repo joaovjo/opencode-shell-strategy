@@ -2,77 +2,99 @@
 
 **Context:** OpenCode's shell environment is non-interactive: it has no TTY/PTY, so commands that wait for input, launch a pager, or open an editor will hang until timeout.
 
-**Scope:** This file is a portable policy for headless agent environments. It is loaded by OpenCode as an instruction file. The rules apply to any comparable non-interactive shell.
+**Scope:** This file is a portable policy for headless agent environments. It is loaded by OpenCode as an instruction file. The rules apply across diverse operating systems (Windows 11 Pro, Ubuntu 26.04+, Arch Linux) and shells (PowerShell 7+, bash, fish).
 
 ## 1. Core rules
 
-1. **No editors or pagers.** `vim`, `nano`, `less`, `more`, `man`, and similar TTY tools are banned.
-2. **No interactive modes.** Avoid flags that open an interactive UI, such as `git add -p`, `git rebase -i`, or `bash -i`.
-3. **Use command-specific non-interactive flags.** Prefer documented flags (`-y`, `--no-input`, `--no-edit`, `--no-pager`) over generic force.
-4. **Fail fast on missing authorization.** When a command cannot run without a password or user choice, use a non-interactive fail-fast form or stop and report.
+1. **No editors or pagers.** `vim`, `nano`, `vi`, `emacs`, `less`, `more`, `man`, and similar TTY tools are banned.
+2. **No interactive modes.** Avoid flags or tools that open an interactive UI/session, such as `git add -p`, `git rebase -i`, `bash -i`, `pwsh -NoExit`, or raw REPL prompts.
+3. **Use command-specific non-interactive flags.** Prefer documented flags (`-y`, `--no-input`, `--no-edit`, `--no-pager`, `--noconfirm`, `--silent`) over generic force.
+4. **Fail fast on missing authorization.** When a command cannot run without a password or user choice, use a non-interactive fail-fast form (`sudo -n`, `BatchMode=yes`) or stop and report.
 5. **Prefer OpenCode tools.** Use `Read`, `Write`, and `Edit` for file operations instead of shell text manipulation when they are available.
 
-## 2. Handling prompts
+## 2. Modern development stack
 
-When a command might prompt, choose one of these outcomes. Do not blanket-approve prompts with `yes | …` or heredocs.
+### Bun & bunx (JavaScript / TypeScript runtime & package manager)
 
-### Authorized non-interactive flag
+Always prefer `bun` and `bunx` over legacy package managers (`npm`, `pnpm`, `yarn`, `node`).
 
-If the requested action is already authorized and the tool provides a non-interactive flag, use it.
-
-```bash
-apt-get install -y pkg
-npm init -y
-pip install --no-input pkg
-```
-
-### Fail-fast with non-interactive mode
-
-If the requested action requires credentials or a user choice and the tool has a non-interactive mode that fails visibly, use it.
+- **Project initialization:** Use `bun init -y` to scaffold without interactive questions.
+- **Dependency management:** `bun install` is non-interactive by default. In CI or strict headless tasks, prefer `bun install --frozen-lockfile`. Add packages using `bun add <pkg>`.
+- **Script execution & testing:** Run scripts via `bun run <script>` or directly execute files via `bun <file.ts>`. Run tests non-interactively with `bun test`.
+- **On-the-fly execution:** Use `bunx <pkg>` or `bun x <pkg>` to execute binaries without global installations.
+- **REPL / Inline code:** Do not run bare `bun repl` or `bun` without arguments. Use `bun -e "code"` or `bun eval "code"` for inline evaluation.
+- **Bun Shell:** In scripts, leverage Bun Shell (`import { $ } from "bun"`) for safe cross-platform command execution and child-process pipelines.
 
 ```bash
-sudo -n command
-ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 user@host
+bun init -y
+bun add express
+bun test
+bun -e "console.log('headless execution')"
 ```
 
-### Stop visibly
+### Astral uv (Python tooling & environment manager)
 
-If the action is not authorized or no safe non-interactive form exists, stop and report that the operation needs user input, credentials, or a trusted host.
+Always prefer `uv` over standard python installations, raw `pip`, or manual `venv` activation scripts.
 
-## 3. SSH and trust
-
-For a new host that is explicitly trusted as a first contact, use `StrictHostKeyChecking=accept-new`. This accepts a previously unknown host key but refuses a changed host key.
+- **Project initialization:** Use `uv init` (or `uv init --no-workspace <name>`) to create projects non-interactively.
+- **Dependency management:** Use `uv add <pkg>` and `uv remove <pkg>`.
+- **Command & script execution:** Always use `uv run <command>` (e.g., `uv run python script.py` or `uv run pytest`). `uv run` automatically resolves, creates, and locks the virtual environment on the fly without needing manual and error-prone shell activation scripts (`source .venv/bin/activate` or `.\.venv\Scripts\Activate.ps1`).
+- **Pip compatibility:** If `pip` interface is needed, use `uv pip install --no-input <pkg>`.
+- **Python version management:** Install Python runtimes non-interactively via `uv python install <version>`.
+- **Inline code:** Run inline Python code using `uv run python -c "code"`.
 
 ```bash
-ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 user@host
+uv init my-project
+uv add requests
+uv run python -c "import requests; print(requests.__version__)"
 ```
 
-`StrictHostKeyChecking=no` is prohibited because it silently accepts changed host keys.
+### fnm (Fast Node Manager)
 
-## 4. Privileged commands
+When Node.js version switching is required for legacy tooling:
 
-Use `sudo -n` to run a command only when it can succeed without a password. If the command requires a password, `sudo -n` exits with a non-zero status.
+- **Switch or install version:** Use `fnm use --install-if-missing <version>` to avoid interactive install confirmations.
+- **Execute with specific runtime:** Use `fnm exec --using=<version> <command>` to run non-interactively in isolated contexts.
+- **Avoid shell hook prompts:** Do not invoke interactive shell setup wizards in headless environments.
 
 ```bash
-sudo -n systemctl status nginx
+fnm use --install-if-missing 22
+fnm exec --using=22 bun test
 ```
 
-Do not pipe passwords to `sudo -S` or any other command.
+## 3. Multi-Shell & Multi-OS Matrix
 
-## 5. Command reference
+Agents operate across diverse operating systems and shell dialects. Follow the appropriate syntax for each environment.
 
-### Package managers
+### Inline environment variables syntax
 
-| Tool | Interactive (BAD) | Non-interactive (GOOD) |
-|------|-------------------|------------------------|
-| npm init | `npm init` | `npm init -y` |
-| npm install | `npm install` (may need config) | `npm install` (non-interactive by default) |
-| apt install | `apt-get install pkg` | `apt-get install -y pkg` |
-| pip install | `pip install pkg` | `pip install --no-input pkg` |
+| Shell | Syntax | Example |
+|-------|--------|---------|
+| **bash** | `VAR=val command` | `GIT_TERMINAL_PROMPT=0 git clone https://...` |
+| **fish** | `env VAR=val command` or `VAR=val command` (fish >= 3.1) | `env UV_NO_PROGRESS=1 uv run script.py` |
+| **PowerShell 7+** | `$env:VAR='val'; command` or `pwsh -Command "$env:VAR='val'; command"` | `$env:GIT_TERMINAL_PROMPT='0'; git clone https://...` |
 
-`npm install` is non-interactive by default. Use it directly; do not pass a blanket `--yes` or `--force` flag. `npm init -y` is the documented shorthand for `npm init --yes`.
+### Non-interactive file operations
 
-### Git
+| Operation | POSIX (bash / fish) | PowerShell 7+ (Windows 11) | Notes |
+|-----------|---------------------|----------------------------|-------|
+| Remove file/dir | `rm -f <file>` / `rm -rf <dir>` | `Remove-Item -Force -Recurse <path>` | Avoid `rm -i`. Verify target path carefully before running. |
+| Copy | `cp -f <src> <dest>` | `Copy-Item -Force -Recurse <src> <dest>` | Avoid `cp -i`. |
+| Move / Rename | `mv -f <src> <dest>` | `Move-Item -Force <src> <dest>` | Avoid `mv -i`. |
+| Extract ZIP | `unzip -o archive.zip` | `Expand-Archive -Force archive.zip -DestinationPath .` | Overwrites existing files without prompt. |
+
+### System package managers
+
+| OS | Tool | Interactive (BAD) | Non-interactive (GOOD) |
+|----|------|-------------------|------------------------|
+| **Arch Linux** | `pacman` | `pacman -S <pkg>` | `sudo -n pacman -S --noconfirm <pkg>` |
+| **Ubuntu / Debian** | `apt-get` | `apt-get install <pkg>` | `sudo -n apt-get install -y <pkg>` |
+| **Windows 11** | `winget` | `winget install <id>` | `winget install --silent --accept-package-agreements --accept-source-agreements <id>` |
+| **Windows 11** | `scoop` | `scoop install <pkg>` | `scoop install <pkg>` (non-interactive by default) |
+
+## 4. Git, SSH and Privileges
+
+### Git operations
 
 | Action | Interactive (BAD) | Non-interactive (GOOD) |
 |--------|-------------------|------------------------|
@@ -81,49 +103,74 @@ Do not pipe passwords to `sudo -S` or any other command.
 | pull | `git pull` | `git pull --no-edit` |
 | rebase | `git rebase -i` | `git rebase` |
 | add | `git add -p` | `git add <file>` |
-| log | `git log` (pager) | `git --no-pager log` |
-| diff | `git diff` (pager) | `git --no-pager diff` |
+| log | `git log` (triggers pager) | `git --no-pager log` |
+| diff | `git diff` (triggers pager) | `git --no-pager diff` |
 
-Git may invoke an editor for `commit` without `-m` and for `merge` or `pull` when a merge message must be edited. Use `--no-edit` to keep the generated message, or supply `-m`. Use `--no-pager` (or `git --no-pager <command>`) to avoid `less` in non-interactive environments.
+### SSH and host verification
 
-### File operations
+For an explicitly trusted first contact with a new host, use `StrictHostKeyChecking=accept-new` and `BatchMode=yes` with a timeout:
 
-| Tool | Notes |
-|------|-------|
-| rm | `rm file` does not prompt by default. `rm -i file` prompts. `rm -f file` suppresses errors and never prompts. Verify the target before running destructive commands. |
-| cp | `cp -i a b` prompts before overwrite. Use `cp a b` if you accept the default, or `cp -f a b` if overwrite is intended. |
-| mv | `mv -i a b` prompts before overwrite. Use `mv a b` if you accept the default, or `mv -f a b` if overwrite is intended. |
-| unzip | `unzip -o file.zip` overwrites existing files without prompting. |
+```bash
+ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 user@host
+```
 
-### REPLs
+`StrictHostKeyChecking=no` is strictly prohibited because it silently accepts changed host keys and ignores security warnings.
 
-| Tool | Interactive (BAD) | Non-interactive (GOOD) |
-|------|-------------------|------------------------|
-| python | `python` | `python -c "code"` |
-| node | `node` | `node -e "code"` |
+### Privileged commands
+
+Use `sudo -n` to run a command only when passwordless execution is configured. If a password is required, `sudo -n` fails immediately instead of hanging on password prompt.
+
+```bash
+sudo -n systemctl status nginx
+```
+
+Never pipe passwords into `sudo -S` or any other prompt (`echo password | sudo ...` is banned).
+
+## 5. Quick command reference
+
+| Category | Tool / Action | Interactive (BAD) | Non-interactive (GOOD) |
+|----------|---------------|-------------------|------------------------|
+| **JS / TS** | bun init | `bun init` | `bun init -y` |
+| **JS / TS** | bun run/test | `bun repl` | `bun test` / `bun -e "code"` |
+| **Python** | uv init | `uv init` (with prompt) | `uv init --no-workspace` |
+| **Python** | uv run | manual `.venv` activate | `uv run <command>` / `uv run python -c "code"` |
+| **Python** | uv pip | `uv pip install` | `uv pip install --no-input <pkg>` |
+| **Node Mgr** | fnm | `fnm use` (prompting) | `fnm use --install-if-missing <ver>` |
+| **Linux PKG** | pacman | `pacman -S pkg` | `sudo -n pacman -S --noconfirm pkg` |
+| **Linux PKG** | apt | `apt-get install pkg` | `sudo -n apt-get install -y pkg` |
+| **Windows PKG**| winget | `winget install id` | `winget install --silent --accept-package-agreements --accept-source-agreements id` |
+| **Git** | git commit | `git commit` | `git commit -m "msg"` |
+| **Git** | git pager | `git log` / `git diff` | `git --no-pager log` / `git --no-pager diff` |
 
 ## 6. Optional per-command environment variables
 
-These variables can be set for a single command when the tool does not provide a dedicated flag. They are not required and should not be set globally as an anti-hang technique.
+Set these variables per command when needed. Do not export them globally in profile files (`.bashrc`, `.profile`, `.zshrc`, `$PROFILE`).
 
 | Variable | Value | Effect |
 |----------|-------|--------|
-| `GIT_TERMINAL_PROMPT` | `0` | Disable git HTTP password prompts |
-| `DEBIAN_FRONTEND` | `noninteractive` | Suppress apt/dpkg UI prompts |
-| `PIP_NO_INPUT` | `1` | Disable pip interactive prompts |
-| `HOMEBREW_NO_AUTO_UPDATE` | `1` | Disable homebrew auto-update during install |
+| `UV_NO_PROGRESS` | `1` | Disables animated progress spinners in uv |
+| `UV_NON_INTERACTIVE` | `1` | Forces uv to fail fast if any input is needed |
+| `GIT_TERMINAL_PROMPT` | `0` | Disables git HTTP terminal password prompts |
+| `DEBIAN_FRONTEND` | `noninteractive` | Suppresses interactive dialogs in apt/dpkg |
+| `PIP_NO_INPUT` | `1` | Disables pip interactive confirmation prompts |
+| `HOMEBREW_NO_AUTO_UPDATE` | `1` | Disables brew update checks before install |
 
-Example:
-
+Example (bash / fish):
 ```bash
 GIT_TERMINAL_PROMPT=0 git clone https://github.com/example/repo.git
 ```
 
+Example (PowerShell 7+):
+```powershell
+$env:GIT_TERMINAL_PROMPT='0'; git clone https://github.com/example/repo.git
+```
+
 ## 7. Source references
 
+- Bun: [Bun Documentation](https://bun.com/docs), [Bun Blog](https://bun.com/blog), [Bun Shell](https://bun.com/docs/runtime/shell), [Bun Child Process](https://bun.com/docs/runtime/child-process).
+- Astral uv: [uv Documentation](https://docs.astral.sh/uv/) — `uv init`, `uv run`, `uv add`, `uv pip`, `uv python`.
+- fnm: [Fast Node Manager](https://github.com/schniz/fnm) — `--install-if-missing`, `exec`.
 - Git: [git-commit](https://git-scm.com/docs/git-commit), [git-merge](https://git-scm.com/docs/git-merge), [git-pull](https://git-scm.com/docs/git-pull), [git-rebase](https://git-scm.com/docs/git-rebase); `--no-edit`, `--no-pager`, `-m`.
 - OpenSSH: [ssh_config(5)](https://man.openbsd.org/ssh_config) — `BatchMode`, `StrictHostKeyChecking`, `ConnectTimeout`.
 - sudo: [sudo(8)](https://www.sudo.ws/docs/man/sudo.man/) — `-n` non-interactive mode.
-- npm: [npm init](https://docs.npmjs.com/cli/v11/commands/npm-init) (`npm init -y`) and [npm install](https://docs.npmjs.com/cli/v11/commands/npm-install) (`npm install` has no `--yes`).
-- rm: [POSIX rm](https://pubs.opengroup.org/onlinepubs/9699919799/utilities/rm.html) — default is non-interactive; `-i` prompts; `-f` ignores errors and prompts.
 - OpenCode: instructions are loaded from the `instructions[]` array in [opencode.json/opencode.jsonc](https://opencode.ai/docs/config/); see also [Rules](https://opencode.ai/docs/rules/).
