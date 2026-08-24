@@ -20,6 +20,8 @@
     "powershell"
   ],
   "author": "joaovjo",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bun": "^1.4.0"
+  }
 }
-

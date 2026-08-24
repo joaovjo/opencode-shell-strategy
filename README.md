@@ -109,7 +109,7 @@ MIT
 - **Astral uv integration:** Full support for `uv` (`uv init`, `uv run`, `uv add`, `uv pip`, `uv python`) eliminating manual venv activation prompts and spinners (`UV_NO_PROGRESS=1`).
 - **fnm (Fast Node Manager):** Non-interactive version switching (`fnm use --install-if-missing`) and headless execution (`fnm exec`).
 - **Multi-Shell & Multi-OS Matrix:** Complete matrix for PowerShell 7+ (Windows 11 Pro), bash, and fish (Ubuntu 26.04+, Arch Linux), including `pacman`, `apt`, `winget`, `scoop`, and cross-shell inline environment syntax.
-- **Bun Test Suite:** Native test harness (`test.ts`) using `bun:test` and Bun runtime tools.
+- **Bun Test Suite:** Native test harness (`shell_strategy.test.ts`) using `bun:test` and Bun runtime tools.
 
 ### v1.1.0
 
